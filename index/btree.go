@@ -6,41 +6,41 @@ import (
 	"sync"
 )
 
-// Btree 封装google/btree这个库
-type Btree struct {
-	btree *btree.BTree
-	lock  *sync.RWMutex
+// BTree 封装google/btree这个库
+type BTree struct {
+	tree *btree.BTree
+	lock *sync.RWMutex
 }
 
-func NewBtree() *Btree {
-	return &Btree{
-		btree: btree.New(32),
-		lock:  new(sync.RWMutex),
+func NewBtree() *BTree {
+	return &BTree{
+		tree: btree.New(32),
+		lock: new(sync.RWMutex),
 	}
 }
 
-func (bt *Btree) Put(key []byte, pos *data.LogRecordPos) bool {
+func (bt *BTree) Put(key []byte, pos *data.LogRecordPos) bool {
 	it := &Item{key, pos}
 	//因为btree对写操作不是并发安全的，所以需要加锁
 	bt.lock.Lock()
 	defer bt.lock.Unlock()
-	bt.btree.ReplaceOrInsert(it)
+	bt.tree.ReplaceOrInsert(it)
 	return true
 }
 
-func (bt *Btree) Get(key []byte) *data.LogRecordPos {
+func (bt *BTree) Get(key []byte) *data.LogRecordPos {
 	it := &Item{key, nil}
-	btItem := bt.btree.Get(it)
+	btItem := bt.tree.Get(it)
 	if btItem == nil {
 		return nil
 	}
 	return btItem.(*Item).pos
 }
 
-func (bt *Btree) Delete(key []byte) bool {
+func (bt *BTree) Delete(key []byte) bool {
 	it := &Item{key, nil}
 	//返回原先的item
-	oldItem := bt.btree.Delete(it)
+	oldItem := bt.tree.Delete(it)
 	if oldItem == nil {
 		return false
 	}
