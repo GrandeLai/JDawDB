@@ -2,6 +2,8 @@ package data
 
 import "JDawDB/fio"
 
+const DataFileNameSuffix = ".data"
+
 // DataFile 数据文件
 type DataFile struct {
 	FileId    uint32         //文件ID
@@ -9,9 +11,9 @@ type DataFile struct {
 	IoManager *fio.IOManager //IO读写管理器
 }
 
-//根据偏移量读取数据
-func (file *DataFile) ReadLogRecord(offset int64) (logRecord *LogRecord, err error) {
-	return nil, nil
+// ReadLogRecord 根据偏移量读取数据
+func (file *DataFile) ReadLogRecord(offset int64) (logRecord *LogRecord, size int64, err error) {
+	return nil, 0, nil
 }
 
 // OpenDataFile 打开新的数据文件
