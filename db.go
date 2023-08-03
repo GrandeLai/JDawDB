@@ -1,9 +1,9 @@
 package JDawDB
 
 import (
-	"JDawDB/data"
-	"JDawDB/index"
 	"errors"
+	"github.com/GrandeLai/JDawDB/data"
+	"github.com/GrandeLai/JDawDB/index"
 	"io"
 	"os"
 	"sort"
@@ -66,7 +66,7 @@ func checkOptions(options Options) error {
 	return nil
 }
 
-//Put 向数据库中写入K/V数据，Key不能为空
+// Put 向数据库中写入K/V数据，Key不能为空
 func (db *DB) Put(key []byte, value []byte) error {
 	if len(key) == 0 {
 		return ErrKeyIsEmpty
@@ -91,7 +91,7 @@ func (db *DB) Put(key []byte, value []byte) error {
 	return nil
 }
 
-//Get 根据Key从数据库中读取数据
+// Get 根据Key从数据库中读取数据
 func (db *DB) Get(key []byte) ([]byte, error) {
 
 	//读数据时需要进行锁的保护
@@ -181,8 +181,8 @@ func (db *DB) appendLogRecord(logRecord *data.LogRecord) (pos *data.LogRecordPos
 	return pos, nil
 }
 
-//setActiveFile 初始化活跃文件的方法
-//访问此方法时需要持有互斥锁
+// setActiveFile 初始化活跃文件的方法
+// 访问此方法时需要持有互斥锁
 func (db *DB) setActiveFile() error {
 	var initialFileId uint32 = 0
 
@@ -199,7 +199,7 @@ func (db *DB) setActiveFile() error {
 	return nil
 }
 
-//loadDataFiles 从磁盘中加载数据文件
+// loadDataFiles 从磁盘中加载数据文件
 func (db *DB) loadDataFiles() error {
 	dirEntries, err := os.ReadDir(db.options.DirPath)
 	if err != nil {
@@ -241,7 +241,7 @@ func (db *DB) loadDataFiles() error {
 	return nil
 }
 
-//loadIndexFromDataFiles 遍历文件中所有记录，并更新到内存索引中
+// loadIndexFromDataFiles 遍历文件中所有记录，并更新到内存索引中
 func (db *DB) loadIndexFromDataFiles() error {
 	if len(db.fileIds) == 0 {
 		return nil

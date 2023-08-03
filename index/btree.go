@@ -1,7 +1,7 @@
 package index
 
 import (
-	"JDawDB/data"
+	"github.com/GrandeLai/JDawDB/data"
 	"github.com/google/btree"
 	"sync"
 )

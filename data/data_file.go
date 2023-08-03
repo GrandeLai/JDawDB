@@ -1,6 +1,6 @@
 package data
 
-import "JDawDB/fio"
+import "github.com/GrandeLai/JDawDB/fio"
 
 const DataFileNameSuffix = ".data"
 
@@ -21,7 +21,7 @@ func OpenDataFile(fileId uint32, filePath string) (file *DataFile, err error) {
 	return
 }
 
-//定义数据写入的方法
+// 定义数据写入的方法
 func (file *DataFile) Write(data []byte) (err error) {
 	return
 }
