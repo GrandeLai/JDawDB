@@ -56,7 +56,7 @@ func (file *DataFile) ReadLogRecord(offset int64) (logRecord *LogRecord, size in
 		Type: header.recordType,
 	}
 	//读取LogRecord中实际的key和value
-	if keySize > 0 && valueSize > 0 {
+	if keySize > 0 || valueSize > 0 {
 		kvBuf, err := file.readNBytes(keySize+valueSize, offset+headerSize)
 		if err != nil {
 			return nil, 0, err
@@ -72,6 +72,7 @@ func (file *DataFile) ReadLogRecord(offset int64) (logRecord *LogRecord, size in
 		return nil, 0, ErrInvalidCRC
 	}
 	return logRecord, recordSize, nil
+
 }
 
 // OpenDataFile 打开新的数据文件
@@ -109,7 +110,7 @@ func (file *DataFile) Close() (err error) {
 	return file.IoManager.Close()
 }
 
-//调用IOManager的Read方法读取指定位置，指定大小的数据，返回byte数组
+// 调用IOManager的Read方法读取指定位置，指定大小的数据，返回byte数组
 func (file *DataFile) readNBytes(n int64, offset int64) (b []byte, err error) {
 	b = make([]byte, n)
 	_, err = file.IoManager.Read(b, offset)

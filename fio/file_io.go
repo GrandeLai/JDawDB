@@ -8,7 +8,7 @@ type FileIO struct {
 }
 
 func NewFileIOManager(filename string) (*FileIO, error) {
-	fd, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE|os.O_APPEND, DataFilePerm)
+	fd, err := os.OpenFile(filename, os.O_CREATE|os.O_RDWR|os.O_APPEND, DataFilePerm)
 	if err != nil {
 		return nil, err
 	}

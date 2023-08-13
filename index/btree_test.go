@@ -47,3 +47,39 @@ func TestBtree_Delete(t *testing.T) {
 	res4 := bt.Delete([]byte("hello"))
 	assert.True(t, res4)
 }
+
+func TestBTree_Iterator(t *testing.T) {
+	bt1 := NewBtree()
+	//1.BTree 为空
+	it1 := bt1.Iterator(false)
+	assert.Equal(t, false, it1.Valid())
+
+	//2.BTree 不为空
+	bt1.Put([]byte("hello"), &data.LogRecordPos{Fid: 1, Offset: 10})
+	it2 := bt1.Iterator(false)
+	assert.Equal(t, true, it2.Valid())
+	t.Log(it2.Key(), it2.Value())
+	it2.Next()
+	assert.Equal(t, false, it2.Valid())
+
+	//3.多个元素
+	bt1.Put([]byte("hello1"), &data.LogRecordPos{Fid: 1, Offset: 10})
+	bt1.Put([]byte("hello2"), &data.LogRecordPos{Fid: 1, Offset: 10})
+	bt1.Put([]byte("hello3"), &data.LogRecordPos{Fid: 1, Offset: 10})
+	it3 := bt1.Iterator(false)
+	for it3.Rewind(); it3.Valid(); it3.Next() {
+		t.Log("key =", string(it3.Key()))
+	}
+
+	//4.反向遍历
+	it4 := bt1.Iterator(true)
+	for it4.Rewind(); it4.Valid(); it4.Next() {
+		t.Log("key =", string(it4.Key()))
+	}
+
+	//5.seek
+	it5 := bt1.Iterator(false)
+	it5.Seek([]byte("hello2"))
+	assert.Equal(t, true, it5.Valid())
+	assert.Equal(t, "hello2", string(it5.Key()))
+}

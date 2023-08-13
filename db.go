@@ -18,7 +18,7 @@ type DB struct {
 	mu         *sync.RWMutex
 	fileIds    []int                     //有序的数据文件ID列表
 	activeFile *data.DataFile            //当前活跃数据文件
-	orderFiles map[uint32]*data.DataFile //旧的数据文件，只读
+	olderFiles map[uint32]*data.DataFile //旧的数据文件，只读
 	indexer    index.Indexer             //内存索引
 }
 
@@ -39,7 +39,7 @@ func Open(options Options) (db *DB, err error) {
 	db = &DB{
 		options:    &options,
 		mu:         new(sync.RWMutex),
-		orderFiles: make(map[uint32]*data.DataFile),
+		olderFiles: make(map[uint32]*data.DataFile),
 		indexer:    index.NewIndexer(options.IndexType),
 	}
 
@@ -91,7 +91,28 @@ func (db *DB) Put(key []byte, value []byte) error {
 	return nil
 }
 
-//Delete 根据key删除对应的数据
+// Get 根据Key从数据库中读取数据
+func (db *DB) Get(key []byte) ([]byte, error) {
+
+	//读数据时需要进行锁的保护
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	//判断Key的有效性
+	if len(key) == 0 {
+		return nil, ErrKeyIsEmpty
+	}
+
+	//从内存索引中获取key对应的LogRecordPos
+	logRecordPos := db.indexer.Get(key)
+	if logRecordPos == nil {
+		return nil, ErrKeyNotFound
+	}
+
+	return db.GetValueByPosition(logRecordPos)
+}
+
+// Delete 根据key删除对应的数据
 func (db *DB) Delete(key []byte) error {
 	//判断key的有效性
 	if len(key) == 0 {
@@ -121,36 +142,86 @@ func (db *DB) Delete(key []byte) error {
 	return nil
 }
 
-// Get 根据Key从数据库中读取数据
-func (db *DB) Get(key []byte) ([]byte, error) {
+// Close 关闭数据库
+func (db *DB) Close() error {
+	if db.activeFile == nil {
+		return nil
+	}
+	db.mu.Lock()
+	defer db.mu.Unlock()
 
-	//读数据时需要进行锁的保护
+	//关闭当前活跃的数据文件
+	if err := db.activeFile.Close(); err != nil {
+		return err
+	}
+
+	//关闭旧的数据文件
+	for _, file := range db.olderFiles {
+		if err := file.Close(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Sync 持久化数据文件
+func (db *DB) Sync() error {
+	if db.activeFile == nil {
+		return nil
+	}
+
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
+	return db.activeFile.Sync()
+}
+
+// ListKeys 获取数据文件中所有的key
+func (db *DB) ListKeys() [][]byte {
+	iterator := db.indexer.Iterator(false)
+	keys := make([][]byte, db.indexer.Size())
+	var idx int
+	for iterator.Rewind(); iterator.Valid(); iterator.Next() {
+		keys[idx] = iterator.Key()
+		idx++
+	}
+	return keys
+}
+
+// Fold 获取数据文件中所有的key，并按照传入的方法执行相对应的操作，返回false时停止遍历
+func (db *DB) Fold(callback func(key []byte, value []byte) bool) error {
 	db.mu.RLock()
 	defer db.mu.RUnlock()
 
-	//判断Key的有效性
-	if len(key) == 0 {
-		return nil, ErrKeyIsEmpty
+	iterator := db.indexer.Iterator(false)
+	for iterator.Rewind(); iterator.Valid(); iterator.Next() {
+		value, err := db.GetValueByPosition(iterator.Value())
+		if err != nil {
+			return err
+		}
+		if !callback(iterator.Key(), value) {
+			//返回false时，停止遍历
+			break
+		}
 	}
+	return nil
+}
 
-	//从内存索引中获取key对应的LogRecordPos
-	logRecordPos := db.indexer.Get(key)
-	if logRecordPos == nil {
-		return nil, ErrKeyNotFound
-	}
+// GetValueByPosition 根据索引信息LogRecordPos从文件中读取value值
+func (db *DB) GetValueByPosition(pos *data.LogRecordPos) ([]byte, error) {
 
 	var dataFile *data.DataFile
-	if db.activeFile.FileId == logRecordPos.Fid {
+	if db.activeFile.FileId == pos.Fid {
 		dataFile = db.activeFile
 	} else {
-		dataFile = db.orderFiles[logRecordPos.Fid]
+		dataFile = db.olderFiles[pos.Fid]
 	}
 	if dataFile == nil {
 		return nil, ErrDataFileNotFound
 	}
 
 	//根据偏移量从数据文件中读取数据
-	record, _, err := dataFile.ReadLogRecord(logRecordPos.Offset)
+	record, _, err := dataFile.ReadLogRecord(pos.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -183,7 +254,7 @@ func (db *DB) appendLogRecord(logRecord *data.LogRecord) (pos *data.LogRecordPos
 			return nil, err
 		}
 
-		db.orderFiles[db.activeFile.FileId] = db.activeFile
+		db.olderFiles[db.activeFile.FileId] = db.activeFile
 
 		//打开新的数据文件
 		if err = db.setActiveFile(); err != nil {
@@ -264,7 +335,7 @@ func (db *DB) loadDataFiles() error {
 		if i == len(fileIds)-1 { //最后一个文件说明是活跃文件
 			db.activeFile = dataFile
 		} else {
-			db.orderFiles[uint32(fid)] = dataFile
+			db.olderFiles[uint32(fid)] = dataFile
 		}
 	}
 
@@ -278,12 +349,12 @@ func (db *DB) loadIndexFromDataFiles() error {
 	}
 
 	for i, fid := range db.fileIds {
-		var fileId uint32 = uint32(fid)
+		var fileId = uint32(fid)
 		var dataFile *data.DataFile
 		if fileId == db.activeFile.FileId {
 			dataFile = db.activeFile
 		} else {
-			dataFile = db.orderFiles[fileId]
+			dataFile = db.olderFiles[fileId]
 		}
 
 		var offset int64 = 0
