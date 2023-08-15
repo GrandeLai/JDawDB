@@ -10,6 +10,7 @@ type LogRecordType = byte
 const (
 	LogRecordNormal LogRecordType = iota
 	LogRecordDeleted
+	LogRecordTxnFinished
 )
 
 // LogRecordHeader的最大值
@@ -34,6 +35,12 @@ type LogRecordHeader struct {
 	recordType LogRecordType //标识类型
 	keySize    uint32        //键的长度
 	valueSize  uint32        //值的长度
+}
+
+// TransactionLogRecord 暂存事务相关的数据
+type TransactionLogRecord struct {
+	Record *LogRecord
+	Pos    *LogRecordPos
 }
 
 // EncodeLogRecord 对LogRecord进行编码，返回byte数组和长度
