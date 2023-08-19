@@ -6,6 +6,7 @@ import (
 	"github.com/GrandeLai/JDawDB/index"
 	"io"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -14,13 +15,14 @@ import (
 
 // DB bitcask存储引擎实例
 type DB struct {
-	options    *Options //文件配置项
+	options    Options //文件配置项
 	mu         *sync.RWMutex
 	fileIds    []int                     //有序的数据文件ID列表
 	activeFile *data.DataFile            //当前活跃数据文件
 	olderFiles map[uint32]*data.DataFile //旧的数据文件，只读
 	indexer    index.Indexer             //内存索引
 	seqNo      uint64                    //事务序列号，全局递增
+	isMerging  bool                      //当前是否有merge操作在进行
 }
 
 // Open 打开bitcask存储引擎
@@ -38,14 +40,24 @@ func Open(options Options) (db *DB, err error) {
 
 	//初始化DB实例结构体
 	db = &DB{
-		options:    &options,
+		options:    options,
 		mu:         new(sync.RWMutex),
 		olderFiles: make(map[uint32]*data.DataFile),
 		indexer:    index.NewIndexer(options.IndexType),
 	}
 
+	//加载merge数据目录
+	if err := db.loadMergeFiles(); err != nil {
+		return nil, err
+	}
+
 	//加载数据文件
 	if err := db.loadDataFiles(); err != nil {
+		return nil, err
+	}
+
+	//从hint文件中加载索引
+	if err := db.loadIndexFromHintFile(); err != nil {
 		return nil, err
 	}
 
@@ -353,6 +365,18 @@ func (db *DB) loadIndexFromDataFiles() error {
 		return nil
 	}
 
+	//查看是否发生过merge
+	hasMerge, nonMergeFileId := false, uint32(0)
+	mergeFinishedFileName := filepath.Join(db.options.DirPath, data.MergeFinishedFileName)
+	if _, err := os.Stat(mergeFinishedFileName); err == nil {
+		fid, err := db.getNonMergeFileId(db.options.DirPath)
+		if err != nil {
+			return err
+		}
+		hasMerge = true
+		nonMergeFileId = fid
+	}
+
 	//定义更新内存索引的函数
 	updateIndex := func(key []byte, typ data.LogRecordType, pos *data.LogRecordPos) {
 		var ok bool
@@ -373,6 +397,11 @@ func (db *DB) loadIndexFromDataFiles() error {
 
 	for i, fid := range db.fileIds {
 		var fileId = uint32(fid)
+
+		//如果filedId小于merge后的文件ID，则跳过
+		if hasMerge && fileId < nonMergeFileId {
+			continue
+		}
 		var dataFile *data.DataFile
 		if fileId == db.activeFile.FileId {
 			dataFile = db.activeFile
@@ -398,7 +427,7 @@ func (db *DB) loadIndexFromDataFiles() error {
 				Offset: offset,
 			}
 
-			//解析key，获取实物序列号
+			//解析key，获取事务序列号
 			realKey, seqNo := ParseLogRecordKeyWithSeqNo(logRecord.Key)
 			if seqNo == NonTxnSeqNo {
 				//非事务操作，直接更新内存索引

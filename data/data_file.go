@@ -13,13 +13,52 @@ var (
 	ErrInvalidCRC = errors.New("invalid crc value,log record may be corrupted")
 )
 
-const DataFileNameSuffix = ".data"
+const (
+	DataFileNameSuffix    = ".data"
+	HintFileName          = "hint-index"
+	MergeFinishedFileName = "merge-finished"
+)
 
 // DataFile 数据文件
 type DataFile struct {
 	FileId    uint32        //文件ID
 	WriteOff  int64         //写入偏移量
 	IoManager fio.IOManager //IO读写管理器
+}
+
+// OpenDataFile 打开新的数据文件
+func OpenDataFile(fileId uint32, dirPath string) (file *DataFile, err error) {
+	fileName := GetDataFileName(dirPath, fileId)
+	return NewDataFile(fileName, fileId)
+}
+
+// OpenHintFile 打开hint索引文件
+func OpenHintFile(dirPath string) (hintFile *DataFile, err error) {
+	fileName := filepath.Join(dirPath, HintFileName)
+	return NewDataFile(fileName, 0)
+}
+
+// OpenMergeFinishedFile 打开一个表示merge完成的文件
+func OpenMergeFinishedFile(dirPath string) (mergeFile *DataFile, err error) {
+	fileName := filepath.Join(dirPath, MergeFinishedFileName)
+	return NewDataFile(fileName, 0)
+}
+
+func GetDataFileName(dirPath string, fileId uint32) string {
+	return filepath.Join(dirPath, fmt.Sprintf("%09d", fileId)+DataFileNameSuffix)
+}
+
+func NewDataFile(fileName string, fileId uint32) (*DataFile, error) {
+	//获取IOManager对象
+	ioManager, err := fio.NewIOManager(fileName)
+	if err != nil {
+		return nil, err
+	}
+	return &DataFile{
+		FileId:    fileId,
+		WriteOff:  0,
+		IoManager: ioManager,
+	}, nil
 }
 
 // ReadLogRecord 根据偏移量读取数据
@@ -75,21 +114,6 @@ func (file *DataFile) ReadLogRecord(offset int64) (logRecord *LogRecord, size in
 
 }
 
-// OpenDataFile 打开新的数据文件
-func OpenDataFile(fileId uint32, dirPath string) (file *DataFile, err error) {
-	fileName := filepath.Join(dirPath, fmt.Sprintf("%09d", fileId)+DataFileNameSuffix)
-	//获取IOManager对象
-	ioManager, err := fio.NewIOManager(fileName)
-	if err != nil {
-		return nil, err
-	}
-	return &DataFile{
-		FileId:    fileId,
-		WriteOff:  0,
-		IoManager: ioManager,
-	}, nil
-}
-
 // 定义数据写入的方法
 func (file *DataFile) Write(data []byte) (err error) {
 	n, err := file.IoManager.Write(data)
@@ -115,4 +139,14 @@ func (file *DataFile) readNBytes(n int64, offset int64) (b []byte, err error) {
 	b = make([]byte, n)
 	_, err = file.IoManager.Read(b, offset)
 	return
+}
+
+// WriteHintRecord 写pos到hint索引文件
+func (file *DataFile) WriteHintRecord(key []byte, pos *LogRecordPos) error {
+	logRecord := &LogRecord{
+		Key:   key,
+		Value: EncodeLogRecordPos(pos),
+	}
+	encRecord, _ := EncodeLogRecord(logRecord)
+	return file.Write(encRecord)
 }

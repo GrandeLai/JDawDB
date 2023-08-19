@@ -9,4 +9,5 @@ var (
 	ErrDataFileNotFound   = errors.New("data file is not found in JDawDB")
 	ErrDataFileCorrupted  = errors.New("data file is corrupted")
 	ErrExceedMacBatchNum  = errors.New("exceed max batch num")
+	ErrMergeInProgress    = errors.New("merge is in progress, please try again later")
 )

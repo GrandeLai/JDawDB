@@ -99,3 +99,30 @@ func GetRecordCRC(logRecord *LogRecord, buf []byte) uint32 {
 	crc = crc32.Update(crc, crc32.IEEETable, logRecord.Value)
 	return crc
 }
+
+// EncodeLogRecordPos 对LogRecordPos进行编码，返回byte数组和长度
+func EncodeLogRecordPos(pos *LogRecordPos) []byte {
+	buf := make([]byte, binary.MaxVarintLen32+binary.MaxVarintLen64)
+	var index = 0
+	index += binary.PutVarint(buf[index:], int64(pos.Fid))
+	index += binary.PutVarint(buf[index:], int64(pos.Offset))
+	return buf[:index]
+}
+
+// DecodeLogRecordPos 对byte数组进行解码，返回LogRecordPos对象和长度
+func DecodeLogRecordPos(buf []byte) *LogRecordPos {
+	if len(buf) <= 0 {
+		return nil
+	}
+	pos := &LogRecordPos{}
+	var index = 0
+	fid, n := binary.Varint(buf[index:])
+	pos.Fid = uint32(fid)
+	index += n
+
+	offset, n := binary.Varint(buf[index:])
+	pos.Offset = offset
+	index += n
+
+	return pos
+}
