@@ -1,6 +1,8 @@
 package JDawDB
 
-import "os"
+import (
+	"os"
+)
 
 // Options 定义打开文件的配置项
 type Options struct {
@@ -32,6 +34,9 @@ const (
 
 	// ART 自适应基数树索引
 	ART
+
+	// BPTree B+ 树索引
+	BPTree
 )
 
 // DefaultOptions 默认配置

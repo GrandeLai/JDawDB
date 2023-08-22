@@ -28,6 +28,7 @@ func TestOpen(t *testing.T) {
 	defer destroyDB(db)
 	assert.Nil(t, err)
 	assert.NotNil(t, db)
+
 }
 
 func TestDB_Put(t *testing.T) {

@@ -3,6 +3,7 @@ package JDawDB
 import (
 	"encoding/binary"
 	"github.com/GrandeLai/JDawDB/data"
+	"github.com/GrandeLai/JDawDB/index"
 	"sync"
 	"sync/atomic"
 )
@@ -22,6 +23,9 @@ type WriteBatch struct {
 
 // NewWriteBatch 初始化WriteBatch
 func (db *DB) NewWriteBatch(opt WriteBatchOptions) *WriteBatch {
+	if db.options.IndexType == index.BPTree && !db.seqNoFileExists && !db.isInitial {
+		panic("cannot use write batch,seq no file is not exists")
+	}
 	return &WriteBatch{
 		mu:            new(sync.RWMutex),
 		db:            db,
