@@ -66,23 +66,24 @@ func TestDB_Put(t *testing.T) {
 	assert.Equal(t, 0, len(val3))
 	assert.Nil(t, err)
 
-	//5.写到数据文件进行了转换
+	// 5.写到数据文件进行了转换
 	for i := 0; i < 1000000; i++ {
 		err := db.Put(utils.GetTestKey(i), utils.RandomValue(128))
 		assert.Nil(t, err)
 	}
 	assert.Equal(t, 2, len(db.olderFiles))
 
-	//6.重启后再 Put 数据
+	// 6.重启后再 Put 数据
 	err = db.Close()
 	assert.Nil(t, err)
 
 	// 重启数据库
 	db2, err := Open(opts)
+	defer destroyDB(db2)
 	assert.Nil(t, err)
 	assert.NotNil(t, db2)
-	defer destroyDB(db2)
 	val4 := utils.RandomValue(128)
+	//val4 := []byte("val4")
 	err = db2.Put(utils.GetTestKey(55), val4)
 	assert.Nil(t, err)
 	val5, err := db2.Get(utils.GetTestKey(55))
@@ -149,7 +150,6 @@ func TestDB_Get(t *testing.T) {
 	assert.Nil(t, err)
 	assert.NotNil(t, val6)
 	assert.Equal(t, val1, val6)
-	defer destroyDB(db2)
 
 	val7, err := db2.Get(utils.GetTestKey(22))
 	assert.Nil(t, err)
@@ -181,7 +181,6 @@ func TestDB_Delete(t *testing.T) {
 
 	// 2.删除一个不存在的 key
 	err = db.Delete([]byte("unknown key"))
-	//assert.Nil(t, err)
 	assert.Equal(t, ErrKeyNotFound, err)
 
 	// 3.删除一个空的 key
@@ -206,7 +205,6 @@ func TestDB_Delete(t *testing.T) {
 
 	// 重启数据库
 	db2, err := Open(opts)
-	defer destroyDB(db2)
 	_, err = db2.Get(utils.GetTestKey(11))
 	assert.Equal(t, ErrKeyNotFound, err)
 
@@ -277,7 +275,7 @@ func TestDB_Fold(t *testing.T) {
 
 func TestDB_Close(t *testing.T) {
 	opts := DefaultOptions
-	dir, _ := os.MkdirTemp("", "bitcask-go-close")
+	dir, _ := os.MkdirTemp("", "JDawDB-close")
 	opts.DirPath = dir
 	db, err := Open(opts)
 	defer destroyDB(db)
@@ -290,7 +288,7 @@ func TestDB_Close(t *testing.T) {
 
 func TestDB_Sync(t *testing.T) {
 	opts := DefaultOptions
-	dir, _ := os.MkdirTemp("", "bitcask-go-sync")
+	dir, _ := os.MkdirTemp("", "JDawDB-sync")
 	opts.DirPath = dir
 	db, err := Open(opts)
 	defer destroyDB(db)

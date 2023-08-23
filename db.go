@@ -71,7 +71,7 @@ func Open(options Options) (db *DB, err error) {
 	}
 
 	//b+tree索引不需要从数据文件中加载索引
-	if options.IndexType == index.BPTree {
+	if options.IndexType != index.BPTree {
 		//从hint文件中加载索引
 		if err := db.loadIndexFromHintFile(); err != nil {
 			return nil, err
@@ -129,9 +129,10 @@ func (db *DB) Put(key []byte, value []byte) error {
 		return err
 	}
 	//第二步：更新内存索引
-	if ok := db.indexer.Put(key, pos); !ok {
-		return ErrIndexUpdatedFailed
-	}
+	//if oldPos := db.indexer.Put(key, pos); oldPos != nil {
+	//	return ErrIndexUpdatedFailed
+	//}
+	_ = db.indexer.Put(key, pos)
 	return nil
 }
 
@@ -179,7 +180,7 @@ func (db *DB) Delete(key []byte) error {
 	}
 
 	//从内存索引中删除
-	ok := db.indexer.Delete(key)
+	_, ok := db.indexer.Delete(key)
 	if !ok {
 		return ErrIndexUpdatedFailed
 	}
@@ -244,6 +245,7 @@ func (db *DB) Sync() error {
 // ListKeys 获取数据文件中所有的key
 func (db *DB) ListKeys() [][]byte {
 	iterator := db.indexer.Iterator(false)
+	defer iterator.Close()
 	keys := make([][]byte, db.indexer.Size())
 	var idx int
 	for iterator.Rewind(); iterator.Valid(); iterator.Next() {
@@ -432,15 +434,24 @@ func (db *DB) loadIndexFromDataFiles() error {
 
 	//定义更新内存索引的函数
 	updateIndex := func(key []byte, typ data.LogRecordType, pos *data.LogRecordPos) {
-		var ok bool
-		//判断LogRecord的类型，如果是删除操作，则从内存索引中删除
+		//var ok bool
+		////判断LogRecord的类型，如果是删除操作，则从内存索引中删除
+		//if typ == data.LogRecordDeleted {
+		//	ok = db.indexer.Delete(key)
+		//} else {
+		//	ok = db.indexer.Put(key, pos)
+		//}
+		//if !ok {
+		//	panic("failed to update index at startup")
+		//}
+		var oldPos *data.LogRecordPos
 		if typ == data.LogRecordDeleted {
-			ok = db.indexer.Delete(key)
+			oldPos, _ = db.indexer.Delete(key)
 		} else {
-			ok = db.indexer.Put(key, pos)
+			oldPos = db.indexer.Put(key, pos)
 		}
-		if !ok {
-			panic("failed to update index at startup")
+		if oldPos != nil {
+
 		}
 	}
 

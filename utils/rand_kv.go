@@ -13,7 +13,7 @@ var (
 
 // GetTestKey 获取测试使用的 key
 func GetTestKey(i int) []byte {
-	return []byte(fmt.Sprintf("JDawDB-value-%09d", i))
+	return []byte(fmt.Sprintf("JDawDB-key-%09d", i))
 }
 
 // RandomValue 生成随机 value，用于测试
