@@ -9,7 +9,9 @@ type Options struct {
 	DirPath      string
 	DataFileSize int64     //数据文件大小
 	SyncWrites   bool      //每次写完数据是否都需要安全的持久化
+	BytesPerSync uint      //累计写到多少字节进行持久化
 	IndexType    IndexType //索引类型
+	MMapAtStart  bool      //是否在启动时使用 MMap 加载数据
 }
 
 type IndexType = int8
@@ -44,7 +46,9 @@ var DefaultOptions = Options{
 	DirPath:      os.TempDir(),
 	DataFileSize: 256 * 1024 * 1024,
 	SyncWrites:   false,
+	BytesPerSync: 0,
 	IndexType:    Btree,
+	MMapAtStart:  true,
 }
 
 // DefaultIteratorOptions 默认迭代器配置

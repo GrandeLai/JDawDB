@@ -28,36 +28,36 @@ type DataFile struct {
 }
 
 // OpenDataFile 打开新的数据文件
-func OpenDataFile(fileId uint32, dirPath string) (file *DataFile, err error) {
+func OpenDataFile(fileId uint32, dirPath string, ioType fio.FileIOType) (file *DataFile, err error) {
 	fileName := GetDataFileName(dirPath, fileId)
-	return NewDataFile(fileName, fileId)
+	return NewDataFile(fileName, fileId, ioType)
 }
 
 // OpenHintFile 打开hint索引文件
 func OpenHintFile(dirPath string) (hintFile *DataFile, err error) {
 	fileName := filepath.Join(dirPath, HintFileName)
-	return NewDataFile(fileName, 0)
+	return NewDataFile(fileName, 0, fio.StandardFIO)
 }
 
 // OpenMergeFinishedFile 打开一个表示merge完成的文件
 func OpenMergeFinishedFile(dirPath string) (mergeFile *DataFile, err error) {
 	fileName := filepath.Join(dirPath, MergeFinishedFileName)
-	return NewDataFile(fileName, 0)
+	return NewDataFile(fileName, 0, fio.StandardFIO)
 }
 
 // OpenSeqNoFile 打开一个存储事务序列号的文件
 func OpenSeqNoFile(dirPath string) (seqNoFile *DataFile, err error) {
 	fileName := filepath.Join(dirPath, SeqNoFileName)
-	return NewDataFile(fileName, 0)
+	return NewDataFile(fileName, 0, fio.StandardFIO)
 }
 
 func GetDataFileName(dirPath string, fileId uint32) string {
 	return filepath.Join(dirPath, fmt.Sprintf("%09d", fileId)+DataFileNameSuffix)
 }
 
-func NewDataFile(fileName string, fileId uint32) (*DataFile, error) {
+func NewDataFile(fileName string, fileId uint32, ioType fio.FileIOType) (*DataFile, error) {
 	//获取IOManager对象
-	ioManager, err := fio.NewIOManager(fileName)
+	ioManager, err := fio.NewIOManager(fileName, ioType)
 	if err != nil {
 		return nil, err
 	}
@@ -156,4 +156,16 @@ func (file *DataFile) WriteHintRecord(key []byte, pos *LogRecordPos) error {
 	}
 	encRecord, _ := EncodeLogRecord(logRecord)
 	return file.Write(encRecord)
+}
+
+func (file *DataFile) SetIOManager(dirPath string, ioType fio.FileIOType) error {
+	if err := file.IoManager.Close(); err != nil {
+		return err
+	}
+	ioManager, err := fio.NewIOManager(GetDataFileName(dirPath, file.FileId), ioType)
+	if err != nil {
+		return err
+	}
+	file.IoManager = ioManager
+	return nil
 }

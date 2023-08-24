@@ -2,8 +2,11 @@ package JDawDB
 
 import (
 	"errors"
+	"fmt"
 	"github.com/GrandeLai/JDawDB/data"
+	"github.com/GrandeLai/JDawDB/fio"
 	"github.com/GrandeLai/JDawDB/index"
+	"github.com/gofrs/flock"
 	"io"
 	"os"
 	"path/filepath"
@@ -13,7 +16,10 @@ import (
 	"sync"
 )
 
-const seqNoKey = "seq-no"
+const (
+	seqNoKey     = "seq-no"
+	fileLockName = "flock" //文件锁名称
+)
 
 // DB bitcask存储引擎实例
 type DB struct {
@@ -27,6 +33,8 @@ type DB struct {
 	isMerging       bool                      //当前是否有merge操作在进行
 	seqNoFileExists bool                      //seqNo文件是否存在，存在才能进行writebatch操作
 	isInitial       bool                      //是否是第一次初始化
+	fileLock        *flock.Flock              //文件锁保证多进程之间的互斥
+	bytesWrite      uint                      //累计已写字节数
 }
 
 // Open 打开bitcask存储引擎
@@ -43,6 +51,17 @@ func Open(options Options) (db *DB, err error) {
 			return nil, err
 		}
 	}
+
+	//判断当前数据目录是否正在使用，加上文件锁
+	fLock := flock.New(filepath.Join(options.DirPath, fileLockName))
+	hold, err := fLock.TryLock()
+	if err != nil {
+		return nil, err
+	}
+	if !hold {
+		return nil, ErrDatabaseIsUsing
+	}
+
 	entries, err := os.ReadDir(options.DirPath)
 	if err != nil {
 		return nil, err
@@ -58,6 +77,7 @@ func Open(options Options) (db *DB, err error) {
 		olderFiles: make(map[uint32]*data.DataFile),
 		indexer:    index.NewIndexer(options.IndexType, options.DirPath, options.SyncWrites),
 		isInitial:  isInitial,
+		fileLock:   fLock,
 	}
 
 	//加载merge数据目录
@@ -80,6 +100,13 @@ func Open(options Options) (db *DB, err error) {
 		//从数据文件中加载索引
 		if err := db.loadIndexFromDataFiles(); err != nil {
 			return nil, err
+		}
+
+		// 重置 IO 类型为标准文件 IO
+		if db.options.MMapAtStart {
+			if err := db.resetIoType(); err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -189,15 +216,21 @@ func (db *DB) Delete(key []byte) error {
 
 // Close 关闭数据库
 func (db *DB) Close() error {
+	defer func() {
+		// 释放文件锁
+		if err := db.fileLock.Unlock(); err != nil {
+			panic(fmt.Sprintf("failed to unlock the directory, %v", err))
+		}
+		// 关闭索引
+		if err := db.indexer.Close(); err != nil {
+			panic(fmt.Sprintf("failed to close index"))
+		}
+	}()
 	if db.activeFile == nil {
 		return nil
 	}
 	db.mu.Lock()
 	defer db.mu.Unlock()
-
-	if err := db.indexer.Close(); err != nil {
-		return err
-	}
 
 	//需要保存当前事务序列号
 	seqNoFile, err := data.OpenSeqNoFile(db.options.DirPath)
@@ -340,10 +373,21 @@ func (db *DB) appendLogRecord(logRecord *data.LogRecord) (pos *data.LogRecordPos
 		return nil, err
 	}
 
-	if db.options.SyncWrites {
+	//根据用户配置决定是否持久化
+	db.bytesWrite += uint(size)
+	var needSync = db.options.SyncWrites
+	if !needSync && db.options.BytesPerSync > 0 && db.bytesWrite >= db.options.BytesPerSync {
+		//没有打开持久化开关但是定义了累计写到多少字节进行持久化
+		needSync = true
+	}
+
+	//打开了持久化开关每次都持久化
+	if needSync {
 		if err = db.activeFile.Sync(); err != nil {
 			return nil, err
 		}
+		//清空累计值
+		db.bytesWrite = 0
 	}
 
 	//构造LogRecordPos结构体
@@ -364,7 +408,7 @@ func (db *DB) setActiveFile() error {
 	}
 
 	//打开新的数据文件
-	dataFile, err := data.OpenDataFile(initialFileId, db.options.DirPath)
+	dataFile, err := data.OpenDataFile(initialFileId, db.options.DirPath, fio.StandardFIO)
 	if err != nil {
 		return err
 	}
@@ -399,7 +443,11 @@ func (db *DB) loadDataFiles() error {
 
 	//遍历文件ID，依次打开数据文件
 	for i, fid := range fileIds {
-		dataFile, err := data.OpenDataFile(uint32(fid), db.options.DirPath)
+		ioType := fio.StandardFIO
+		if db.options.MMapAtStart {
+			ioType = fio.MemoryMap
+		}
+		dataFile, err := data.OpenDataFile(uint32(fid), db.options.DirPath, ioType)
 		if err != nil {
 			return err
 		}
@@ -547,5 +595,22 @@ func (db *DB) loadSeqNo() error {
 	}
 	db.seqNo = seqNo
 	db.seqNoFileExists = true
+	return nil
+}
+
+// 将数据文件的 IO 类型设置为标准文件 IO
+func (db *DB) resetIoType() error {
+	if db.activeFile == nil {
+		return nil
+	}
+
+	if err := db.activeFile.SetIOManager(db.options.DirPath, fio.StandardFIO); err != nil {
+		return err
+	}
+	for _, dataFile := range db.olderFiles {
+		if err := dataFile.SetIOManager(db.options.DirPath, fio.StandardFIO); err != nil {
+			return err
+		}
+	}
 	return nil
 }

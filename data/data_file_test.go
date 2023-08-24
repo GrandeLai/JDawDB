@@ -1,20 +1,21 @@
 package data
 
 import (
+	"github.com/GrandeLai/JDawDB/fio"
 	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
 )
 
 func TestOpenDataFile(t *testing.T) {
-	dataFile, err := OpenDataFile(0, os.TempDir())
+	dataFile, err := OpenDataFile(0, os.TempDir(), fio.StandardFIO)
 	assert.Nil(t, err)
 	assert.NotNil(t, dataFile)
 	t.Log(os.TempDir())
 }
 
 func TestOpenDataFile_Write(t *testing.T) {
-	dataFile, err := OpenDataFile(1231, os.TempDir())
+	dataFile, err := OpenDataFile(1231, os.TempDir(), fio.StandardFIO)
 	assert.Nil(t, err)
 	assert.NotNil(t, dataFile)
 
@@ -23,7 +24,7 @@ func TestOpenDataFile_Write(t *testing.T) {
 }
 
 func TestOpenDataFile_Close(t *testing.T) {
-	dataFile, err := OpenDataFile(132, os.TempDir())
+	dataFile, err := OpenDataFile(132, os.TempDir(), fio.StandardFIO)
 	assert.Nil(t, err)
 	assert.NotNil(t, dataFile)
 
@@ -35,7 +36,7 @@ func TestOpenDataFile_Close(t *testing.T) {
 }
 
 func TestOpenDataFile_Sync(t *testing.T) {
-	dataFile, err := OpenDataFile(134, os.TempDir())
+	dataFile, err := OpenDataFile(134, os.TempDir(), fio.StandardFIO)
 	assert.Nil(t, err)
 	assert.NotNil(t, dataFile)
 
@@ -47,7 +48,7 @@ func TestOpenDataFile_Sync(t *testing.T) {
 }
 
 func TestDataFile_ReadLogRecord(t *testing.T) {
-	dataFile, err := OpenDataFile(551, os.TempDir())
+	dataFile, err := OpenDataFile(551, os.TempDir(), fio.StandardFIO)
 	assert.Nil(t, err)
 	assert.NotNil(t, dataFile)
 

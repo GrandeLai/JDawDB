@@ -10,4 +10,5 @@ var (
 	ErrDataFileCorrupted  = errors.New("data file is corrupted")
 	ErrExceedMacBatchNum  = errors.New("exceed max batch num")
 	ErrMergeInProgress    = errors.New("merge is in progress, please try again later")
+	ErrDatabaseIsUsing    = errors.New("database is being used by another process")
 )
