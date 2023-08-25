@@ -99,3 +99,16 @@ func TestBTree_Iterator(t *testing.T) {
 		assert.NotNil(t, iter6.Key())
 	}
 }
+
+func TestBTree_Size(t *testing.T) {
+	bt := NewBtree()
+
+	res1 := bt.Put([]byte("a"), &data.LogRecordPos{Fid: 1, Offset: 2})
+	assert.Nil(t, res1)
+
+	res2 := bt.Put([]byte("a"), &data.LogRecordPos{Fid: 11, Offset: 12})
+	assert.NotNil(t, res2)
+
+	res3 := bt.Size()
+	assert.Equal(t, 1, res3)
+}

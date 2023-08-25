@@ -2,6 +2,7 @@ package JDawDB
 
 import (
 	"github.com/GrandeLai/JDawDB/data"
+	"github.com/GrandeLai/JDawDB/utils"
 	"io"
 	"os"
 	"path"
@@ -29,9 +30,32 @@ func (db *DB) Merge() error {
 	}
 	db.isMerging = true
 
+	// 查看可以 merge 的数据量是否达到了阈值
+	totalSize, err := utils.DirSize(db.options.DirPath)
+	if err != nil {
+		db.mu.Unlock()
+		return err
+	}
+	if float32(db.reclaimSize)/float32(totalSize) < db.options.DataFileMergeRatio {
+		db.mu.Unlock()
+		return ErrMergeRatioUnreached
+	}
+
+	// 查看剩余的空间容量是否可以容纳 merge 之后的数据量
+	availableDiskSize, err := utils.AvailableDiskSizeOnLinux()
+	if err != nil {
+		db.mu.Unlock()
+		return err
+	}
+	if uint64(totalSize-db.reclaimSize) >= availableDiskSize {
+		db.mu.Unlock()
+		return ErrNoEnoughSpaceForMerge
+	}
+
 	defer func() {
 		db.isMerging = false
 	}()
+
 	//持久化当前活跃的数据文件
 	if err := db.activeFile.Sync(); err != nil {
 		db.mu.Unlock()
@@ -179,6 +203,10 @@ func (db *DB) loadMergeFiles() error {
 			break
 		}
 		if dirEntry.Name() == data.SeqNoFileName {
+			continue
+		}
+		//遇到文件锁的目录直接跳过
+		if dirEntry.Name() == fileLockName {
 			continue
 		}
 		mergeFileNames = append(mergeFileNames, dirEntry.Name())

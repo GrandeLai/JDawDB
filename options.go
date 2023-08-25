@@ -6,12 +6,13 @@ import (
 
 // Options 定义打开文件的配置项
 type Options struct {
-	DirPath      string
-	DataFileSize int64     //数据文件大小
-	SyncWrites   bool      //每次写完数据是否都需要安全的持久化
-	BytesPerSync uint      //累计写到多少字节进行持久化
-	IndexType    IndexType //索引类型
-	MMapAtStart  bool      //是否在启动时使用 MMap 加载数据
+	DirPath            string
+	DataFileSize       int64     //数据文件大小
+	SyncWrites         bool      //每次写完数据是否都需要安全的持久化
+	BytesPerSync       uint      //累计写到多少字节进行持久化
+	IndexType          IndexType //索引类型
+	MMapAtStart        bool      //是否在启动时使用 MMap 加载数据
+	DataFileMergeRatio float32   //需要merge的数据文件占总数据文件的比例阈值
 }
 
 type IndexType = int8
@@ -43,12 +44,13 @@ const (
 
 // DefaultOptions 默认配置
 var DefaultOptions = Options{
-	DirPath:      os.TempDir(),
-	DataFileSize: 256 * 1024 * 1024,
-	SyncWrites:   false,
-	BytesPerSync: 0,
-	IndexType:    Btree,
-	MMapAtStart:  true,
+	DirPath:            os.TempDir(),
+	DataFileSize:       256 * 1024 * 1024,
+	SyncWrites:         false,
+	BytesPerSync:       0,
+	IndexType:          Btree,
+	MMapAtStart:        true,
+	DataFileMergeRatio: 0.5,
 }
 
 // DefaultIteratorOptions 默认迭代器配置
