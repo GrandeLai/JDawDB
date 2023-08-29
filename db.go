@@ -206,7 +206,7 @@ func (db *DB) Delete(key []byte) error {
 
 	//检查key是否存在
 	if pos := db.indexer.Get(key); pos == nil {
-		return ErrKeyNotFound
+		return nil
 	}
 
 	logRecord := &data.LogRecord{
