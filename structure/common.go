@@ -17,3 +17,7 @@ func (ds *DataStructure) Type(key []byte) (DataType, error) {
 	// 第一个字节就是类型
 	return encValue[0], nil
 }
+
+func (ds *DataStructure) Close() error {
+	return ds.db.Close()
+}
